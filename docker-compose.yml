@@ -1,0 +1,31 @@
+services:
+  freetoken:
+    image: freetoken:latest
+    container_name: freetoken-server
+    # Required: shared memory for KV cache / multi-worker communication.
+    # Omitting this can cause Bus error or CUDA OOM crashes.
+    ipc: host
+    ports:
+      - "1919:1919"
+    environment:
+      # Only needed for gated/private models
+      - HF_TOKEN=${HF_TOKEN:-}
+      - HF_HOME=/root/.cache/huggingface
+    volumes:
+      # Persist model weights across container restarts
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    command:
+      - "--model"
+      - "${MODEL_NAME:-ornith-ai/Ornith-1.5-35B-A3B-FP8}"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "1919"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped

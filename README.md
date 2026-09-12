@@ -52,6 +52,7 @@ uv pip install -e ".[accel]"
 For More details:
 
 - [Install FreeToken](https://github.com/FlashML-org/FreeToken/blob/main/docs/install.md)
+- [Run with Docker](https://github.com/FlashML-org/FreeToken/blob/main/docs/docker.md)
 - [Quick start](https://github.com/FlashML-org/FreeToken/blob/main/docs/quickstart.md)
 - [Supported models](https://github.com/FlashML-org/FreeToken/blob/main/docs/models.md)
 - [CLI reference](https://github.com/FlashML-org/FreeToken/blob/main/docs/cli.md)

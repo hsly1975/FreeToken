@@ -1,0 +1,12 @@
+# Keep the image lean: only the source needed to build `freetoken[accel]`
+# (pyproject.toml, setup.py, python/) is copied in.
+.git
+.github
+.venv
+__pycache__
+*.pyc
+tests
+benchmarks
+assets
+docs
+*.md
