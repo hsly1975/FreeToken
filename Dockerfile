@@ -10,9 +10,11 @@
 # Run:    see docker-compose.yml or docs/docker.md
 
 # CUDA devel base so nvcc + headers are available for kernel compilation.
-# The toolchain check only compares CUDA *major* versions (13 == 13), so a
-# 13.3.1 toolkit is compatible with the cu130 torch wheel.
-FROM nvidia/cuda:13.3.1-devel-ubuntu26.04
+# The toolchain check only compares CUDA *major* versions (13 == 13).
+# Base: CUDA 13.0.2 (driver 580.x supports up to CUDA 13.0; 13.3 requires
+# a newer driver). torch is pinned to the cu130 wheel, which matches this
+# toolkit exactly.
+FROM nvidia/cuda:13.0.2-devel-ubuntu22.04
 
 # Clear any proxy env inherited from the Docker daemon (a dead proxy in the
 # daemon environment makes apt/pip inside the build fail with
