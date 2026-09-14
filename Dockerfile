@@ -14,6 +14,11 @@
 # 13.3.1 toolkit is compatible with the cu130 torch wheel.
 FROM nvidia/cuda:13.3.1-devel-ubuntu26.04
 
+# Clear any proxy env inherited from the Docker daemon (a dead proxy in the
+# daemon environment makes apt/pip inside the build fail with
+# "Unable to connect to <proxy>"). Explicit empty ENV overrides inherited vars.
+ENV http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= no_proxy=
+
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     CUDA_HOME=/usr/local/cuda \
