@@ -99,6 +99,8 @@ A real-world reference deployment of **Ornith-35B-A3B-FP8** (35B-total / 3B-acti
 
 ### Deployment
 
+> **Quick start:** see [`deploy/`](deploy/README.md) — verified production compose + one-click `install.sh` + offline image import/export scripts (中文使用说明).
+
 Docker container `freetoken-ornith`, image `freetoken:latest`:
 
 - Model dir `/data/models` mounted **read-only** at `/models`
