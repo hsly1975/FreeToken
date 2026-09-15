@@ -347,9 +347,10 @@ def _moe_dims(model_config):
 
 
 def iter_expert_pieces(model_path, config, kind: QuantKind, *, parallel: bool | None = False, workers: int = 8, chunk: int = 8 << 20):
-    """Block-fp8 routed experts, one piece per expert: ``{gate, up, down}`` fp8 codes and their
-    ``_scale`` (block scale) companions, named as the checkpoint's dialect stores them. Other expert kinds use the generic readers."""
-    if kind is not QuantKind.FP8_BLOCK:
+    """FP8 routed experts (block-fp8 or per-row / per-channel fp8), one piece per expert:
+    ``{gate, up, down}`` fp8 codes and their ``_scale`` companions, named as the checkpoint's
+    dialect stores them. Other expert kinds use the generic readers."""
+    if kind not in (QuantKind.FP8_BLOCK, QuantKind.FP8_TENSOR):
         return None
     if get_tp_info().size > 1:
         raise NotImplementedError("qwen3_5_moe fp8 expert banks support TP=1 only")
@@ -357,7 +358,10 @@ def iter_expert_pieces(model_path, config, kind: QuantKind, *, parallel: bool | 
     from freetoken.moe.expert_pieces import per_expert_pieces
 
     L, E, H, I, dense = _moe_dims(config)
-    scale = get_quant_config().stored_tensors(QuantKind.FP8_BLOCK)["weight_scale_inv"].name
+    if kind is QuantKind.FP8_BLOCK:
+        scale = get_quant_config().stored_tensors(QuantKind.FP8_BLOCK)["weight_scale_inv"].name
+    else:
+        scale = get_quant_config().stored_tensors(QuantKind.FP8_TENSOR)["weight_scale"].name
     key_re = re.compile(_FP8_EXPERT_KEY_RE.format(scale=re.escape(scale)))
     suffix = {"weight": "", scale: "_scale"}
 
