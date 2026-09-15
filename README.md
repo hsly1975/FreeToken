@@ -84,3 +84,41 @@ learned the design and reused code from the following projects:
 ## License
 
 [Apache License 2.0](https://github.com/FlashML-org/FreeToken/blob/main/LICENSE).
+
+## Deployment & Performance (RTX 4070S 12GB)
+
+A real-world reference deployment of **Ornith-35B-A3B-FP8** (35B-total / 3B-active MoE, FP8) on a single consumer GPU.
+
+### Hardware
+
+| Component | Spec |
+|---|---|
+| GPU | NVIDIA RTX 4070S 12GB (bound as `device=1`) |
+| System RAM | 62GB (shared, used for MoE expert offload banks) |
+| Host | X99 dual-socket, PCIe 3.0 |
+
+### Deployment
+
+Docker container `freetoken-ornith`, image `freetoken:latest`:
+
+- Model dir `/data/models` mounted **read-only** at `/models`
+- GPU pinned to `device=1` (the 4070S), port `1919:8000`
+- `--moe-strategy offload` — MoE experts live in CPU offload banks, attention + active experts on GPU
+- `max_model_len=262144` (256K nominal), restart policy `unless-stopped`
+- Steady-state VRAM: **~11.5G / 12G**
+
+### Context length — measured, not nominal
+
+> **Important:** the engine advertises `max_model_len=262144` (256K), but the **practically usable context is ~8K tokens.**
+
+- The KV-cache pool is **GPU-only** and fills up at roughly **8,207 tokens** (token usage → 0.99).
+- Requests longer than that are **dropped**, e.g. from the logs:
+  `WARNING Input sequence length 9526 exceeds 8207, request dropped`.
+- **System RAM cannot extend the context.** The KV cache is not offloadable to host memory in this build — only the MoE *experts* are offloaded. So the 62GB of system RAM helps expert residency, not context length.
+
+**Practical guidance:** keep prompts + history under ~7–8K tokens on a 12GB card. To get longer context you need more VRAM (bigger card / multi-GPU), not more system RAM.
+
+### What this means
+
+- 35B-class MoE runs interactively on a 12GB card **because** the experts are offloaded to system RAM.
+- The bottleneck for long context is **VRAM for KV**, which is fixed by the GPU and cannot be borrowed from host memory.
