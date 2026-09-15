@@ -91,6 +91,14 @@ def expert_bank_row_bytes(fmt: str, hidden_size: int, moe_intermediate_size: int
             "down": H * I,
             "down_scale": (H // B) * fp8_block_scale_pad(H // B, I // B) * 2,
         }
+    if fmt == "fp8_tensor":
+        # per-row fp8 expert banks: fp8 weights + bf16 per-output-row scales
+        return {
+            "gate_up": 2 * I * H,
+            "gate_up_scale": 2 * I * 2,
+            "down": H * I,
+            "down_scale": H * 2,
+        }
     if fmt == "q4_0":
         # gemma4/gguf.py _q4_0_expert_specs: GGML Q4_0 rows, 32 elems -> 18 bytes
         return {"gate_up": 2 * I * (H // 32 * 18), "down": H * (I // 32 * 18)}

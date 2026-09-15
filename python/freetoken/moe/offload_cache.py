@@ -42,6 +42,11 @@ _BANK_SCHEMAS: dict[str, tuple[str, ...]] = {
     # Half the host/cache footprint of bf16; the grouped GEMM (kernel/triton/fp8_blockscale_moe)
     # reads the routed fp8 rows directly and dequantizes in the K-loop (no bf16 materialization).
     "fp8_block": ("gate_up", "gate_up_scale", "down", "down_scale"),
+    # per-row (per-channel) fp8 experts (compressed-tensors float-quantized, e.g.
+    # Ornith-1.5-35B-A3B-FP8): fp8-e4m3 weights + one bf16 scale per output row.
+    # gate_up [L*E, 2I, H] fp8 + gate_up_scale [L*E, 2I] bf16; down [L*E, H, I] fp8
+    # + down_scale [L*E, H] bf16. Read by kernel/triton/fp8_tensor_moe (inline dequant).
+    "fp8_tensor": ("gate_up", "gate_up_scale", "down", "down_scale"),
     # native GGUF Q4_0 experts: packed block bytes per output row, dequantized inside
     # the borrowed ggml MoE kernels. gate_up [L*E, 2I, H//32*18], down [L*E, H, I//32*18].
     "q4_0": ("gate_up", "down"),
@@ -89,6 +94,7 @@ _BANK_BYTES_PER_EXPERT = {
         (2 * I // 128) * fp8_block_scale_pad(2 * I // 128, H // 128)
         + (H // 128) * fp8_block_scale_pad(H // 128, I // 128)
     ) * 2,
+    "fp8_tensor": lambda H, I: 3 * I * H + (2 * I + H) * 2,
     "q4_0": lambda H, I: 2 * I * (H // 32) * 18 + H * (I // 32) * 18,
     "nvfp4": lambda H, I: 2 * I * (H // 2 + H // 16 + 2) + H * (I // 2 + I // 16 + 2),
     "mxfp4": lambda H, I: 2 * I * (H // 2 + H // 32 + 2) + H * (I // 2 + I // 32 + 2),
