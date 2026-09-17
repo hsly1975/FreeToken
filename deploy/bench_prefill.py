@@ -18,17 +18,37 @@ MAX_TOKENS = int(sys.argv[3]) if len(sys.argv) > 3 else 128
 RUNS = int(sys.argv[4]) if len(sys.argv) > 4 else 3
 URL = f"http://127.0.0.1:{PORT}/v1/chat/completions"
 
-# Fixed deterministic prompt (~80 tokens/para * REPEATS).
-PARA = (
-    "In the study of pump station operation and maintenance, the engineer must "
-    "carefully monitor water levels, flow rates, and pressure differentials "
-    "across the entire hydraulic system. Regular inspection of mechanical "
-    "seals, bearings, and coupling alignment is essential to prevent "
-    "unexpected failures during peak demand periods. The channel maintenance "
-    "crew coordinates with the dispatch center to optimize gate openings and "
-    "minimize energy consumption while ensuring safe operation. "
-)
-PROMPT = PARA * REPEATS
+# Unique prompt per run (avoids radix cache hits, measures real prefill).
+import random, string
+
+def make_prompt(target_tokens, seed):
+    """Generate a unique prompt of approximately target_tokens tokens."""
+    rng = random.Random(seed)
+    words = []
+    # Calibrated: ~1.47 tokens per word (incl. space) on Qwen tokenizer
+    # (measured: 1300 words -> 1912 tokens). So words = tokens / 1.47.
+    n_words = int(target_tokens / 1.47)
+    base_words = [
+        "pump", "station", "hydraulic", "valve", "pressure", "flow", "water",
+        "channel", "maintenance", "inspection", "bearing", "coupling", "seal",
+        "discharge", "suction", "head", "efficiency", "turbine", "generator",
+        "transformer", "circuit", "breaker", "relay", "protection", "monitor",
+        "sensor", "actuator", "controller", "frequency", "voltage", "current",
+        "temperature", "vibration", "alignment", "lubrication", "cooling",
+        "intake", "outlet", "reservoir", "flood", "drought", "irrigation",
+        "drainage", "culvert", "weir", "spillway", "gate", "aperture",
+        "discharge", "capacity", "rating", "nominal", "actual", "measured",
+        "calculated", "theoretical", "empirical", "statistical", "analysis",
+        "diagnosis", "prediction", "optimization", "scheduling", "dispatch",
+        "coordination", "regulation", "stabilization", "balancing", "matching",
+    ]
+    for i in range(n_words):
+        w = rng.choice(base_words)
+        # Add unique suffix to prevent cache hits
+        if i % 10 == 0:
+            w += str(rng.randint(1000, 9999))
+        words.append(w)
+    return " ".join(words)
 
 
 def get_model():
@@ -39,10 +59,10 @@ def get_model():
         return "default"
 
 
-def run_once(model):
+def run_once(model, prompt):
     body = {
         "model": model,
-        "messages": [{"role": "user", "content": PROMPT}],
+        "messages": [{"role": "user", "content": prompt}],
         "max_tokens": MAX_TOKENS,
         "temperature": 0,
         "stream": True,
@@ -78,13 +98,16 @@ def run_once(model):
 
 def main():
     model = get_model()
-    print(f"model={model} prompt_chars={len(PROMPT)} max_tokens={MAX_TOKENS}")
+    # REPEATS now interpreted as target prompt tokens (unique prompt per run)
+    target_tokens = REPEATS
+    print(f"model={model} target_prompt_tokens={target_tokens} max_tokens={MAX_TOKENS}")
     # warmup (populates MoE cache / JIT)
-    run_once(model)
+    run_once(model, make_prompt(target_tokens, seed=0))
     print("warmup done, starting timed runs")
     ttfts, decs = [], []
     for i in range(RUNS):
-        ttft, total, n = run_once(model)
+        prompt = make_prompt(target_tokens, seed=1000 + i)
+        ttft, total, n = run_once(model, prompt)
         dec = (n - 1) / (total - ttft) if total > ttft and n > 1 else 0.0
         ttfts.append(ttft)
         decs.append(dec)
