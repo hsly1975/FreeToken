@@ -1,0 +1,64 @@
+# syntax=docker/dockerfile:1
+# NInfer V100 (Volta / sm_70) 定制镜像
+# 与仓库自带 Dockerfile 的区别：
+#   - CUDA 13.1.2 -> 12.8.1（CMakeLists 明确：sm_70 需要 CUDA 12.8，13.x 已删 Volta 离线编译）
+#   - 显式 -DCMAKE_CUDA_ARCHITECTURES=70
+#   - 附带 bench 工具（可选，便于切换后跑官方口径基准）
+FROM nvidia/cuda:12.8.1-devel-ubuntu24.04 AS build
+
+# 基础镜像烤进了旁路由代理 (192.168.31.10:1082)，该代理当前拒绝连接，
+# 导致容器内 apt 走代理失败。清空代理变量让 apt 直连（宿主机直连 ubuntu 源可用）。
+ENV http_proxy="" https_proxy="" HTTP_PROXY="" HTTPS_PROXY="" no_proxy="" NO_PROXY=""
+
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        cmake \
+        git \
+        python3 \
+        libavcodec-dev \
+        libavformat-dev \
+        libavutil-dev \
+        libcurl4-openssl-dev \
+        libswscale-dev \
+        ninja-build \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY . .
+
+RUN cmake -S . -B /build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
+        -DCMAKE_CUDA_ARCHITECTURES=70 \
+        -DNINFER_BUILD_APPS=ON \
+        -DBUILD_TESTING=OFF \
+        -DNINFER_BUILD_BENCHMARKS=ON \
+    && cmake --build /build --parallel 4 --target ninfer ninfer-serve ninfer_bench
+
+FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04
+
+# 同 build 阶段：清空镜像内烤进的代理变量，apt 直连
+ENV http_proxy="" https_proxy="" HTTP_PROXY="" HTTPS_PROXY="" no_proxy="" NO_PROXY=""
+
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        ca-certificates \
+        libavcodec60 \
+        libavformat60 \
+        libavutil58 \
+        libcurl4t64 \
+        libswscale7 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /build/apps/ninfer /usr/local/bin/ninfer
+COPY --from=build /build/apps/ninfer-serve /usr/local/bin/ninfer-serve
+COPY --from=build /build/bench/ninfer_bench /usr/local/bin/ninfer_bench
+
+WORKDIR /workspace
+EXPOSE 8080
+STOPSIGNAL SIGTERM
+
+CMD ["ninfer-serve", "--help"]
